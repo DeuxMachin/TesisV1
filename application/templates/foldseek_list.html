@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>FoldSeek Viewer</title>
+</head>
+<body>
+    <h1>Estructuras disponibles (FoldSeek)</h1>
+    <ul>
+        {% for structure in structures %}
+            <li>
+                <a href="{{ url_for('foldseek.visualizar_estructura', alignment_detail_id=structure['alignment_detail_id']) }}">
+                    {{ structure['database_name'] }} - {{ structure['target'] }}
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

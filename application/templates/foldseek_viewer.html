@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualización PDB</title>
+    <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+</head>
+<body>
+    <h1>Visualizador de PDB (FoldSeek)</h1>
+    <div style="width: 100%; height: 600px;" id="viewer"></div>
+
+    <script>
+        let viewer = $3Dmol.createViewer("viewer", {
+            backgroundColor: "white"
+        });
+
+        // Cargar referencia
+        viewer.addModel(`{{ ref_pdb }}`, "pdb");
+        viewer.setStyle({}, {cartoon: {color: 'lightblue'}});
+
+        // Cargar objetivo alineado
+        viewer.addModel(`{{ aligned_pdb }}`, "pdb");
+        viewer.setStyle({model: 1}, {cartoon: {color: 'orange'}});
+
+        viewer.zoomTo();
+        viewer.render();
+    </script>
+</body>
+</html>
