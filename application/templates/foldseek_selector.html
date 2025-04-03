@@ -2,61 +2,87 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualización de Estructuras Proteicas Alineadas</title>
     <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
-    <style>
-        body { font-family: Arial; padding: 20px; background-color: #1c1c1c; color: white; }
-        select, button { padding: 8px; margin: 8px 0; width: 100%; }
-        .viewer-container { width: 100%; height: 500px; margin-top: 20px; }
-        .alert { background-color: #665c00; color: #fff6b0; padding: 15px; margin-top: 20px; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
 
     <h1>Visualización de Estructuras Proteicas Alineadas</h1>
     <form method="POST">
-        <label for="source">Seleccione el tipo de procesamiento:</label>
-        <select id="source" name="source" onchange="this.form.submit()">
-            <option value="">-- Seleccione --</option>
-            <option value="foldseek" {{ 'selected' if selected_source == 'foldseek' else '' }}>FoldSeek</option>
-            <option value="uniprot" {{ 'selected' if selected_source == 'uniprot' else '' }}>UniProt</option>
+        <select name="source" onchange="this.form.submit()">
+            <option value="">Selecciona la fuente</option>
+            <option value="foldseek" {% if selected_source == 'foldseek' %}selected{% endif %}>FoldSeek</option>
+            <option value="uniprot" {% if selected_source == 'uniprot' %}selected{% endif %}>UniProt</option>
         </select>
 
-        {% if selected_source %}
-            <label for="structure_id">Seleccione una estructura:</label>
-            <select id="structure_id" name="structure_id">
-                {% if selected_source == 'foldseek' %}
-                    {% for s in foldseek_structures %}
-                        <option value="{{ s.alignment_detail_id }}" {{ 'selected' if s.alignment_detail_id|string == selected_id }}> 
-                            {{ s.database_name }} - {{ s.target }}
-                        </option>
-                    {% endfor %}
-                {% elif selected_source == 'uniprot' %}
-                    {% for s in uniprot_structures %}
-                        <option value="{{ s.alignment_id }}" {{ 'selected' if s.alignment_id|string == selected_id }}> 
-                            {{ s.protein_name }} ({{ s.accession_number }})
-                        </option>
-                    {% endfor %}
-                {% endif %}
-            </select>
+        <select name="structure_id">
+            {% if selected_source == "foldseek" %}
+                {% for s in foldseek_structures %}
+                    <option value="{{ s.alignment_detail_id }}" {% if s.alignment_detail_id|string == selected_id %}selected{% endif %}>
+                        {{ s.database_name }} -- {{ s.target }} (FoldSeek)
+                    </option>
+                {% endfor %}
+            {% endif %}
+            {% if selected_source == "uniprot" %}
+                {% for s in uniprot_structures %}
+                    <option value="{{ s.alignment_id }}" {% if s.alignment_id|string == selected_id %}selected{% endif %}>
+                        {{ s.accession_number }} -- {{ s.protein_name }} -- {% if s.has_pdb %}(PDB: ✓){% else %}(PDB: X){% endif %} -- {% if s.has_alphafold %}(AlphaFold: ✓){% else %}(AlphaFold: X){% endif %}
+                    </option>
+                {% endfor %}
+            {% endif %}
+        </select>
 
-            <button type="submit">Procesar Estructura</button>
-        {% endif %}
+        <label><input type="checkbox" name="show_structures" value="yes" {% if show_structures %}checked{% endif %}> Mostrar estructuras</label>
+
+        <button type="submit">Aplicar</button>
     </form>
 
-    <h2>Visualizador de Mutaciones</h2>
+    {% if alignment_main %}
+        <div class="card">
+            <h2>Detalles de Alineamiento Principal</h2>
+            <pre>
+Porcentaje de score ajustado y similitud: {{ alignment_main.similarity }}%
+Secuencia referencia: {{ alignment_main.reference }}
+Alineamiento         : {{ alignment_main.match }}
+Secuencia objetivo   : {{ alignment_main.target }}
+            </pre>
+        </div>
+    {% endif %}
 
-    {% if ref_pdb and aligned_pdb %}
-        <div id="viewer" class="viewer-container"></div>
-        <script>
-            const viewer = $3Dmol.createViewer("viewer", { backgroundColor: "white" });
-            viewer.addModel(`{{ ref_pdb }}`, "pdb");
-            viewer.setStyle({}, { cartoon: { color: 'lightblue' } });
-            viewer.addModel(`{{ aligned_pdb }}`, "pdb");
-            viewer.setStyle({model: 1}, { cartoon: { color: 'orange' } });
-            viewer.zoomTo();
-            viewer.render();
-        </script>
+    {% if aligned_zones %}
+        <div class="card">
+            <h2>Detalles de Zonas Alineadas</h2>
+            {% for zona in aligned_zones %}
+                <pre>
+Zona {{ loop.index }}:
+Zona referencia: {{ zona.ref }}
+Match          : {{ zona.match }}
+Zona objetivo  : {{ zona.target }}
+                </pre>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if ref_pdb and aligned_pdb and show_structures %}
+        <details open>
+            <summary>Visualizador 3D de Proteínas Alineadas</summary>
+            <div id="viewer" class="viewer-container"></div>
+            <script>
+                const viewer = $3Dmol.createViewer("viewer", { backgroundColor: "white" });
+                viewer.addModel(`{{ ref_pdb }}`, "pdb");
+                viewer.setStyle({}, { cartoon: { color: 'lightblue' } });
+                viewer.addModel(`{{ aligned_pdb }}`, "pdb");
+                viewer.setStyle({model: 1}, { cartoon: { color: 'orange' } });
+                viewer.zoomTo();
+                viewer.render();
+            </script>
+        </details>
+    {% elif ref_pdb and aligned_pdb %}
+        <div class="alert">
+            Para visualizar las estructuras en 3D, marque la casilla "Mostrar estructuras" y pulse "Aplicar".
+        </div>
     {% else %}
         <div class="alert">
             No hay estructura PDB cargada. Por favor, procese primero una estructura.

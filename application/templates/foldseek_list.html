@@ -2,18 +2,22 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FoldSeek Viewer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
     <h1>Estructuras disponibles (FoldSeek)</h1>
-    <ul>
-        {% for structure in structures %}
-            <li>
-                <a href="{{ url_for('foldseek.visualizar_estructura', alignment_detail_id=structure['alignment_detail_id']) }}">
-                    {{ structure['database_name'] }} - {{ structure['target'] }}
-                </a>
-            </li>
-        {% endfor %}
-    </ul>
+    <div class="card">
+        <ul>
+            {% for structure in structures %}
+                <li>
+                    <a href="{{ url_for('foldseek.visualizar_estructura', alignment_detail_id=structure['alignment_detail_id']) }}">
+                        {{ structure['database_name'] }} - {{ structure['target'] }}
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
 </body>
 </html>

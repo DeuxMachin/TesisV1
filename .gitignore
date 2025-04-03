@@ -1,1 +1,1 @@
-echo "database/proteins_discovery.db" >> .gitignore
+database/proteins_discovery.db
