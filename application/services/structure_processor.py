@@ -122,6 +122,14 @@ class StructureProcessor:
         ''', (accession_number,))
         ref_pdb = cursor.fetchone()
         conn.close()
+        
+        # If no reference PDB found, use the water-containing reference
+        if not ref_pdb or not ref_pdb[0]:
+            water_pdb_path = os.path.join(os.path.dirname(db_path), "vsd_water_bk_test.pdb")
+            if os.path.exists(water_pdb_path):
+                with open(water_pdb_path, 'r') as f:
+                    return f.read()
+        
         return ref_pdb[0] if ref_pdb else None
 
     def cut_and_align_pdb(self, db_path, pdb_content, sequence, accession_number):
@@ -132,15 +140,26 @@ class StructureProcessor:
             f.write(pdb_content)
 
         mol_id = molecule.load('pdb', temp_pdb)
-        selection = atomsel(f"protein and sequence {sequence}", molid=mol_id)
+        
+        # Primera selección: encontrar cadena principal con la secuencia
+        protein_selection = atomsel(f"protein and sequence {sequence}", molid=mol_id)
 
-        if len(selection) == 0:
-            return None
+        if len(protein_selection) == 0:
+            # Try without sequence constraint if nothing found
+            protein_selection = atomsel("protein", molid=mol_id)
+            if len(protein_selection) == 0:
+                return None
 
-        chains = selection.get('chain')
+        chains = protein_selection.get('chain')
         primary_chain = sorted(set(chains))[0] if chains else None
+        
         if primary_chain:
-            final_selection = atomsel(f"chain {primary_chain} and sequence {sequence}", molid=mol_id)
+            # Asegurarse de incluir TODAS las moléculas de agua
+            final_selection = atomsel(f"(chain {primary_chain} and protein) or (resname HOH or resname WAT)", molid=mol_id)
+            final_selection.write('pdb', cut_pdb)
+        else:
+            # If no chain identified, try to get all protein and water
+            final_selection = atomsel("protein or resname HOH or resname WAT", molid=mol_id)
             final_selection.write('pdb', cut_pdb)
 
         with open(cut_pdb, 'r') as f:
@@ -153,10 +172,13 @@ class StructureProcessor:
         if not ref_pdb:
             return None
 
+        # En PyMOL, asegurarse de preservar moléculas HETATM (incluidas aguas)
         with pymol2.PyMOL() as pymol_session:
             pymol_session.cmd.read_pdbstr(ref_pdb, "reference")
             pymol_session.cmd.read_pdbstr(cut_pdb_content, "target")
-            pymol_session.cmd.align("target", "reference")
+            # Primero alinear solo usando la proteína
+            pymol_session.cmd.align("target and polymer", "reference and polymer")
+            # Obtener el PDB completo incluyendo aguas
             aligned_pdb = pymol_session.cmd.get_pdbstr("target")
 
         return aligned_pdb
@@ -173,6 +195,7 @@ class StructureProcessor:
         conn.close()
 
     def get_reference_pdb_foldseek(self, db_path, foldseek_id):
+        # Este método debe asegurarse de cargar un PDB con agua
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -183,6 +206,28 @@ class StructureProcessor:
         ''', (foldseek_id,))
         ref_pdb = cursor.fetchone()
         conn.close()
+        
+        # Si no hay PDB de referencia con agua, usar explícitamente el archivo de respaldo con agua
+        water_pdb_path = os.path.join(os.path.dirname(db_path), "vsd_water_bk_test.pdb")
+        if os.path.exists(water_pdb_path):
+            with open(water_pdb_path, 'r') as f:
+                water_content = f.read()
+                # Si el PDB de referencia existe pero no contiene agua, mezclamos con el PDB de agua
+                if ref_pdb and ref_pdb[0]:
+                    # Verificar si ya tiene agua
+                    if "HOH" not in ref_pdb[0] and "WAT" not in ref_pdb[0]:
+                        # Agregar moléculas de agua del PDB de respaldo
+                        # Extraer solo las líneas de agua
+                        water_lines = [line for line in water_content.split('\n') 
+                                      if line.startswith("ATOM") and ("HOH" in line or "WAT" in line)]
+                        if water_lines:
+                            # Devolver PDB original con líneas de agua añadidas
+                            return ref_pdb[0] + "\n" + "\n".join(water_lines)
+                    return ref_pdb[0]
+                else:
+                    # Si no hay PDB de referencia, usar el PDB de agua completo
+                    return water_content
+        
         return ref_pdb[0] if ref_pdb else None
 
     def process_foldseek_entry(self, db_path, foldseek_id, download_link, start_pos, end_pos):
