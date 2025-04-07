@@ -7,58 +7,7 @@ from vmd import molecule, atomsel
 
 class Py3DMolService:
     @staticmethod
-    def create_protein_viewer(ref_pdb_data, aligned_pdb_data):
-        """
-        Crea un visualizador py3Dmol con los datos de referencia y alineados.
-        Implementación más cercana al enfoque de Streamlit.
-        """
-        # Crear archivos temporales para cargar los datos PDB
-        temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "temp")
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        # Guardar PDBs como archivos temporales
-        ref_path = os.path.join(temp_dir, f"ref_{os.getpid()}.pdb")
-        aligned_path = os.path.join(temp_dir, f"aligned_{os.getpid()}.pdb")
-        
-        with open(ref_path, 'w') as ref_file:
-            ref_file.write(ref_pdb_data)
-            
-        with open(aligned_path, 'w') as aligned_file:
-            aligned_file.write(aligned_pdb_data)
-        
-        # Combinar PDbs como se hace en Streamlit
-        combined_path = os.path.join(temp_dir, f"combined_{os.getpid()}.pdb")
-        Py3DMolService.combine_pdbs(ref_path, aligned_path, combined_path)
-        
-        # Crear visualizador como en Streamlit
-        viewer = py3Dmol.view(width=800, height=600)
-        
-        with open(ref_path, 'r') as f:
-            ref_data = f.read()
-            viewer.addModel(ref_data, "pdb")
-        
-        with open(aligned_path, 'r') as f:
-            aligned_data = f.read()
-            viewer.addModel(aligned_data, "pdb")
-        
-        # Establecer estilos igual que en Streamlit
-        viewer.setStyle({'model': 0}, {'cartoon': {'color': 'lightblue'}})
-        viewer.setStyle({'model': 1}, {'cartoon': {'color': 'orange'}})
-        
-        viewer.zoomTo()
-        
-        # Obtener HTML
-        html = viewer._make_html()
-        
-        # Cleanup temporal files
-        try:
-            os.unlink(ref_path)
-            os.unlink(aligned_path)
-            os.unlink(combined_path)
-        except:
-            pass
-            
-        return html
+
     
     @staticmethod
     def combine_pdbs(pdb1_path, pdb2_path, output_path):

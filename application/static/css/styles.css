@@ -69,6 +69,16 @@ label {
     border: 1px solid #444;
 }
 
+/* Molstar específico */
+#molstar-viewer {
+    border: 1px solid #3a6ea5;
+}
+
+/* Py3Dmol específico */
+.mutation-viewer-container {
+    border: 1px solid #f52828;
+}
+
 .alert { 
     background-color: #665c00; 
     color: #fff6b0; 
@@ -137,4 +147,28 @@ a {
 a:hover {
     text-decoration: underline;
     color: #bbddff;
+}
+
+/* Añadir estos estilos al final del archivo */
+
+/* Contenedor específico para Mol* */
+#molstar-container {
+    position: relative;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Mejorar contraste de controles de Mol* */
+#molstar-viewer .msp-layout-controls {
+    background-color: rgba(0,0,0,0.6);
+}
+
+/* Mensaje de carga más visible */
+#molstar-loading {
+    font-weight: bold;
+    padding: 15px 20px !important;
+    border-radius: 8px !important;
+    background-color: rgba(0,0,0,0.8) !important;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
 }

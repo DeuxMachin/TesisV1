@@ -1,10 +1,11 @@
 import os
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, jsonify
 from application.services.foldseek_data_fetch import FoldSeekDataFetch
 from application.services.uniprot_data_fetch import UniProtDataFetch
 from application.services.alignment_processor import procesar_estructura_foldseek
-from application.services.py3dmol_service import Py3DMolService  # Nuevo servicio
+from application.services.py3dmol_service import Py3DMolService
 import tempfile
+import base64
 
 foldseek_bp = Blueprint('foldseek', __name__, template_folder="../templates")
 
@@ -15,7 +16,7 @@ os.makedirs(temp_dir, exist_ok=True)
 db_path = os.path.join("database", "proteins_discovery.db")
 foldseek_fetcher = FoldSeekDataFetch(db_path)
 uniprot_fetcher = UniProtDataFetch(db_path)
-py3dmol_service = Py3DMolService()  # Nuevo servicio
+py3dmol_service = Py3DMolService()
 
 def procesar_estructura_uniprot(alignment_id, db_path):
     """
@@ -111,6 +112,7 @@ def procesar_estructura_uniprot(alignment_id, db_path):
         "zonas_alineadas": zonas_alineadas[:4]  # Asegurarnos de limitar a exactamente 4 zonas
     }
 
+
 @foldseek_bp.route("/", methods=["GET", "POST"])
 def index():
     selected_source = request.form.get("source", "")
@@ -118,8 +120,9 @@ def index():
     ref_pdb, aligned_pdb = None, None
     alignment_main = None
     aligned_zones = []
-    viewer_html = None  # Nuevo para almacenar el HTML del visualizador
-    mutation_viewer_html = None  # Nuevo para el visualizador de mutaciones
+    mutation_viewer_html = None
+    encoded_ref_pdb = None
+    encoded_aligned_pdb = None
 
     foldseek_structures = foldseek_fetcher.get_foldseek_structures()
     uniprot_structures = uniprot_fetcher.get_uniprot_structures()
@@ -143,97 +146,72 @@ def index():
                     alignment_main = resultado["alineamiento_principal"]
                     aligned_zones = resultado["zonas_alineadas"]
                     
-                    # Si se solicita mostrar estructuras, crear el visualizador
-                    if show_structures:
-                        viewer_html = py3dmol_service.create_protein_viewer(ref_pdb, aligned_pdb)
+                    if show_structures and ref_pdb and aligned_pdb:
+                        # Codificar datos PDB para el Visualizador 3D de Estructuras (Mol*)
+                        encoded_ref_pdb = base64.b64encode(ref_pdb.encode()).decode()
+                        encoded_aligned_pdb = base64.b64encode(aligned_pdb.encode()).decode()
                         
-                        # También crear un visualizador de mutaciones si hay datos disponibles
-                        # (Esto se puede adaptar según sea necesario)
+                        # SEPARADO: Procesamos datos para el visualizador de mutaciones
+                        residue_info, count, resids = py3dmol_service.get_residue_info(aligned_pdb)
+                        
+                        # Construir mapeo de residuos a secuencia para MUTACIONES
+                        res_seq = {}
+                        if resultado and "alineamiento_principal" in resultado:
+                            alignment_match = resultado["alineamiento_principal"].get("match", "")
+                            target_aligned = resultado["alineamiento_principal"].get("target", "")
+                            
+                            for i in range(min(len(resids), len(target_aligned), len(alignment_match))):
+                                if i < len(resids) and resids[i]:
+                                    res_seq[resids[i][0]] = (target_aligned[i], alignment_match[i])
+                        
+                        # Construir información de zonas para MUTACIONES
+                        zones_matches = []
+                        for i, zona in enumerate(aligned_zones):
+                            if zona["ref"] and zona["match"] and zona["target"]:
+                                zone_residues = py3dmol_service.get_zone_residues(
+                                    aligned_pdb, 
+                                    zona["target"], 
+                                    resultado["alineamiento_principal"].get("target", "")
+                                )
+                                if zone_residues:
+                                    zone_matches = [(zone_residues[j], zona["match"][j]) 
+                                                  for j in range(min(len(zone_residues), len(zona["match"])))]
+                                    zones_matches.append({
+                                        'zone_number': i+1,
+                                        'residues': zone_residues,
+                                        'matches': zone_matches,
+                                        'sequence': zona["target"],
+                                        'match_pattern': zona["match"]
+                                    })
+                        
+                        # SOLO para el visualizador de MUTACIONES (py3Dmol)
                         mutation_viewer_html = py3dmol_service.create_mutation_visualization(
                             aligned_pdb,
                             res_seq=res_seq,
                             res_zone_seq=zones_matches
                         )
-                        
+                
                 elif selected_source == "uniprot":
-                    # Usar el procesador para UniProt
+                    # Procesar datos UniProt
                     resultado = procesar_estructura_uniprot(int(selected_id), db_path)
                     ref_pdb = resultado["ref_pdb"]
                     aligned_pdb = resultado["aligned_pdb"]
                     alignment_main = resultado["alineamiento_principal"]
                     aligned_zones = resultado["zonas_alineadas"]
                     
-                    # Si se solicita mostrar estructuras, crear el visualizador
-                    if show_structures:
-                        viewer_html = py3dmol_service.create_protein_viewer(ref_pdb, aligned_pdb)
+                    if show_structures and ref_pdb and aligned_pdb:
+                        # Codificar datos PDB para Mol*
+                        encoded_ref_pdb = base64.b64encode(ref_pdb.encode()).decode()
+                        encoded_aligned_pdb = base64.b64encode(aligned_pdb.encode()).decode()
                         
-                        # También crear un visualizador de mutaciones si hay datos disponibles
-                        mutation_viewer_html = py3dmol_service.create_mutation_visualization(
-                            aligned_pdb,
-                            res_seq=res_seq,
-                            res_zone_seq=zones_matches
-                        )
+                        # Similar procesamiento para visualizador de mutaciones...
+                        # Implementar si es necesario
+            
             except Exception as e:
                 print(f"Error retrieving structure: {e}")
                 ref_pdb, aligned_pdb = None, None
                 alignment_main = None
                 aligned_zones = []
-
-    # Construir visualizadores con datos de secuencia y zona
-    if request.method == "POST" and selected_source and selected_id and show_structures:
-        try:
-            # Si se solicita mostrar estructuras, construir visualizador principal
-            if show_structures:
-                # Obtener datos de residuos para FoldSeek
-                if selected_source == "foldseek" and aligned_pdb:
-                    # Procesar datos de residuos y zonas
-                    residue_info, count, resids = py3dmol_service.get_residue_info(aligned_pdb)
-                    
-                    # Construir mapeo de residuos a secuencia
-                    res_seq = {}
-                    if resultado and "alineamiento_principal" in resultado:
-                        alignment_match = resultado["alineamiento_principal"].get("match", "")
-                        target_aligned = resultado["alineamiento_principal"].get("target", "")
-                        
-                        for i in range(min(len(resids), len(target_aligned), len(alignment_match))):
-                            if i < len(resids) and resids[i]:
-                                res_seq[resids[i][0]] = (target_aligned[i], alignment_match[i])
-                    
-                    # Construir información de zonas
-                    zones_matches = []
-                    for i, zona in enumerate(aligned_zones):
-                        if zona["ref"] and zona["match"] and zona["target"]:
-                            zone_residues = py3dmol_service.get_zone_residues(
-                                aligned_pdb, 
-                                zona["target"], 
-                                resultado["alineamiento_principal"].get("target", "")
-                            )
-                            if zone_residues:
-                                zone_matches = [(zone_residues[j], zona["match"][j]) 
-                                               for j in range(min(len(zone_residues), len(zona["match"])))]
-                                zones_matches.append({
-                                    'zone_number': i+1,
-                                    'residues': zone_residues,
-                                    'matches': zone_matches,
-                                    'sequence': zona["target"],
-                                    'match_pattern': zona["match"]
-                                })
-                
-                # Crear visualizador principal
-                viewer_html = py3dmol_service.create_protein_viewer(ref_pdb, aligned_pdb)
-                
-                # Crear visualizador de mutaciones
-                mutation_viewer_html = py3dmol_service.create_mutation_visualization(
-                    aligned_pdb,
-                    res_seq=res_seq,
-                    res_zone_seq=zones_matches
-                )
-                
-        except Exception as e:
-            print(f"Error retrieving structure: {e}")
-            ref_pdb, aligned_pdb = None, None
-            alignment_main = None
-            aligned_zones = []
 
     return render_template(
         "foldseek_selector.html", 
@@ -243,9 +221,10 @@ def index():
         selected_id=selected_id,
         ref_pdb=ref_pdb,
         aligned_pdb=aligned_pdb,
+        encoded_ref_pdb=encoded_ref_pdb,
+        encoded_aligned_pdb=encoded_aligned_pdb,
         show_structures=show_structures,
         alignment_main=alignment_main,
         aligned_zones=aligned_zones,
-        viewer_html=viewer_html,  # Nuevo - HTML del visualizador
-        mutation_viewer_html=mutation_viewer_html  # Nuevo - HTML del visualizador de mutaciones
+        mutation_viewer_html=mutation_viewer_html
     )

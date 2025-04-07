@@ -4,14 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualización de Estructuras Proteicas Alineadas</title>
-
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/viewer_controls.css') }}">
+.css') }}">
     
     <!-- Cargar jQuery primero -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+<!-- Mol* JS -->
+<script src="https://unpkg.com/molstar/build/viewer/molstar.js"></script>
+<!-- Mol* CSS -->
+<link rel="stylesheet" href="https://unpkg.com/molstar/build/viewer/molstar.css" />
 
-</head>
 <body>
     <h1>Visualización de Estructuras Proteicas Alineadas</h1>
 
@@ -79,24 +83,35 @@ Zona objetivo  : {{ zona.target }}
         {% endif %}
 
         
+        <!-- VISUALIZADOR 3D de ESTRUCTURAS usando Mol* -->
         {% if ref_pdb and aligned_pdb and show_structures %}
             <div class="card">
-                <h2>Visualizador 3D</h2>
-                
-                
-                {% if viewer_html %}
-                    <div class="viewer-container">
-                        {{ viewer_html|safe }}
+                <h2>Visualizador 3D de Estructuras</h2>
+                <div id="molstar-container" style="width: 100%; height: 550px;">
+                    <div id="molstar-viewer" 
+                         class="viewer-container"
+                         data-ref-pdb="{{ encoded_ref_pdb }}"
+                         data-aligned-pdb="{{ encoded_aligned_pdb }}">
                     </div>
-                {% endif %}
+                    <div id="molstar-loading" style="display:block; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.7); color:white; padding:10px; border-radius:4px; z-index:1000;">
+                        Cargando visualizador...
+                    </div>
+                </div>
+                
+               
+                </div>
             </div>
-            
-            <!-- Visualizador de mutaciones -->
+
+            <!-- VISUALIZADOR DE MUTACIONES usando py3Dmol (completamente separado) -->
             <div class="card">
                 <h2>Visualizador de Mutaciones</h2>
                 {% if mutation_viewer_html %}
-                    <div class="viewer-container">
+                    <div class="mutation-viewer-container viewer-container">
                         {{ mutation_viewer_html|safe }}
+                    </div>
+                {% else %}
+                    <div class="alert">
+                        No hay datos disponibles para mostrar mutaciones.
                     </div>
                 {% endif %}
             </div>
@@ -119,5 +134,10 @@ Zona objetivo  : {{ zona.target }}
         <p>© 2023 Proyecto de Visualización de Proteínas</p>
     </footer>
     
+
+    {% if show_structures and ref_pdb and aligned_pdb %}
+     
+        <script src="{{ url_for('static', filename='js/molstar_viewer.js') }}"></script>
+    {% endif %}
 </body>
 </html>
